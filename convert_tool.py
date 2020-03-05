@@ -1,12 +1,15 @@
 from PyQt5 import QtWidgets, uic, QtCore, QtGui
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
-
+from translate.storage.tmx import tmxfile
+from translate.storage.xliff import xlifffile, xliffunit
+from lxml import etree
 import sys
 import openpyxl
 import os
 import re
 
+delimiter = '|'
 def display_error_message(content):
     msg = QMessageBox()
     msg.setIcon(QMessageBox.Critical)
@@ -25,6 +28,7 @@ def get_file_type(extension):
     if extension == ".tmx":
         extension = "Tmx"
     return extension
+
 
 CONVERT_TYPE = ["Text to Excel", "Excel to Text", "Text to Tmx", "Tmx to Text", "Text to Xliff", "Xliff to Text", "Excel to Xliff", "Xliff to Excell", \
     "Excel to Tmx", "Tmx to Excel", "Xliff to Tmx", "Tmx to Xliff"]
@@ -74,34 +78,235 @@ class MainWindow(QtWidgets.QMainWindow):
             dest_file = self.tbl_task.item(self.selected_task_id, 1).text()
             c_type = self.tbl_task.item(self.selected_task_id, 2).text()
             if c_type == "Text to Excel":
-                convert_Text2Excel(source_file, dest_file)
+                self.convert_Text2Excel(source_file, dest_file)
             if c_type == "Excel to Text":
-                convert_Excel2Text(source_file, dest_file)
+                self.convert_Excel2Text(source_file, dest_file)
             if c_type == "Text to Tmx":
-                convert_Text2Tmx(source_file, dest_file)
+                self.convert_Text2Tmx(source_file, dest_file)
             if c_type == "Tmx to Text":
-                convert_Tmx2Text(source_file, dest_file)
+                self.convert_Tmx2Text(source_file, dest_file)
             if c_type == "Text to Xliff":
-                convert_Text2Xliff(source_file, dest_file)
+                self.convert_Text2Xliff(source_file, dest_file)
             if c_type == "Xliff to Text":
-                convert_Xliff2Text(source_file, dest_file)
+                self.convert_Xliff2Text(source_file, dest_file)
             if c_type == "Excel to Tmx":
-                convert_Excel2Tmx(source_file, dest_file)
+                self.convert_Excel2Tmx(source_file, dest_file)
             if c_type == "Tmx to Excel":
-                convert_Tmx2Excel(source_file, dest_file)
+                self.convert_Tmx2Excel(source_file, dest_file)
             if c_type == "Tmx to Xliff":
-                convert_Tmx2Xliff(source_file, dest_file)
+                self.convert_Tmx2Xliff(source_file, dest_file)
             if c_type == "Xliff to Tmx":
-                convert_Xliff2Tmx(source_file, dest_file)
+                self.convert_Xliff2Tmx(source_file, dest_file)
             if c_type == "Excel to Xliff":
-                convert_Excel2Xliff(source_file, dest_file)
+                self.convert_Excel2Xliff(source_file, dest_file)
             if c_type == "Xliff to Excel":
-                convert_Xliff2Excel(source_file, dest_file)
+                self.convert_Xliff2Excel(source_file, dest_file)
 
 
     @QtCore.pyqtSlot()
     def select_item(self):
         self.selected_task_id = self.tbl_task.currentRow()
+    def convert_Text2Excel(self, src, dst):
+        if not os.path.exists(dst):
+            dst_wb = openpyxl.Workbook()
+            ss_sheet = dst_wb['Sheet']
+            ss_sheet.title = 'transmem'
+            dst_wb.save(dst)
+        dst_wb = openpyxl.load_workbook(dst)
+        dst_ws = dst_wb['transmem']
+        lines = open(src, encoding='utf-8').read().strip().split('\n')
+        dst_ws.cell(1, 1).value = 'en'
+        dst_ws.cell(1, 2).value = 'th'
+        
+        for row, l in enumerate(lines, start=2):
+            s = l.split(delimiter)
+            dst_ws.cell(row, 1).value = s[0]
+            dst_ws.cell(row, 2).value = s[1]
+        dst_wb.save(dst)
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+
+    def convert_Excel2Text(self, src, dst):
+        src_wb = openpyxl.load_workbook(src)
+        src_ws = src_wb.worksheets[0]
+        
+        en_col = 1
+        th_col = 2
+        for col in range(1,src_ws.max_column):
+            cell_value = src_ws.cell(1, col).value.lower()
+            if 'en' == cell_value:
+                en_col = col
+            if 'th' == cell_value:
+                th_col = col
+        with open(dst, 'w', encoding='utf-8') as dst_file:
+            for row in range(2, src_ws.max_row+1):
+                dst_file.write(src_ws.cell(row, en_col).value + delimiter + src_ws.cell(row, th_col).value + '\n')
+        dst_file.close()
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+    
+    def convert_Text2Tmx(self, src, dst):
+        tmx_file = tmxfile()
+        lines = open(src, encoding='utf-8').read().strip().split('\n')
+        for line in lines:
+            s = line.split(delimiter)
+            tmx_file.addtranslation(s[0], "en", s[1], "th")
+        tmx_file.savefile(dst)
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+
+    def convert_Tmx2Text(self, src, dst):
+        dst_file = open(dst, 'w', encoding='utf-8')
+        with open(src, 'rb') as fin:
+            tmx_file = tmxfile(fin, 'en', 'th')
+            for node in tmx_file.unit_iter():
+                dst_file.write(node.getsource() + delimiter + node.gettarget() + '\n')
+        dst_file.close()
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+
+    def convert_Text2Xliff(self, src, dst):
+        xliff_file = xlifffile()
+        xliff_file.setsourcelanguage('en')
+        xliff_file.settargetlanguage('th')
+        lines = open(src, encoding='utf-8').read().strip().split('\n')
+        for line in lines:
+            s = line.split(delimiter)
+            node = xliffunit(s[0])
+            node.settarget(s[1])
+            xliff_file.addunit(node)
+        
+        xliff_file.savefile(dst)
+        fin = open(dst, "r", encoding='utf-8')
+        data = fin.read()
+        fin.close()
+        data = data.replace('<xliff xmlns="urn:oasis:names:tc:xliff:document:1.1" version="1.1">', '<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">')
+        fout = open(dst, 'w', encoding='utf-8')
+        fout.write(data)
+        fout.close()
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+    def convert_Xliff2Text(self, src, dst):
+        fin = open(src, 'r', encoding = "utf-8")
+        data = fin.read()
+        xliff_file = xlifffile.parsestring(data)
+        txt_file = open(dst, 'w', encoding='utf-8')
+        for node in xliff_file.unit_iter():
+            txt_file.write(node.source + delimiter + node.target + '\n')
+        txt_file.close()
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+
+    def convert_Excel2Tmx(self, src, dst):
+        src_wb = openpyxl.load_workbook(src)
+        src_ws = src_wb.worksheets[0]
+        
+        en_col = 1
+        th_col = 2
+        for col in range(1,src_ws.max_column):
+            cell_value = src_ws.cell(1, col).value.lower()
+            if 'en' == cell_value:
+                en_col = col
+            if 'th' == cell_value:
+                th_col = col
+        tmx_file = tmxfile()
+        for row in range(2, src_ws.max_row+1):
+            tmx_file.addtranslation(src_ws.cell(row, en_col).value, "en", src_ws.cell(row, th_col).value, "th")
+        tmx_file.savefile(dst)
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+    
+    def convert_Tmx2Excel(self, src, dst):
+        if not os.path.exists(dst):
+            dst_wb = openpyxl.Workbook()
+            ss_sheet = dst_wb['Sheet']
+            ss_sheet.title = 'transmem'
+            dst_wb.save(dst)
+        dst_wb = openpyxl.load_workbook(dst)
+        dst_ws = dst_wb['transmem']
+        lines = open(src, encoding='utf-8').read().strip().split('\n')
+        dst_ws.cell(1, 1).value = 'en'
+        dst_ws.cell(1, 2).value = 'th'
+        with open(src, 'rb') as fin:
+            tmx_file = tmxfile(fin, 'en', 'th')
+            row = 2
+            for node in tmx_file.unit_iter():
+                dst_ws.cell(row, 1).value = node.getsource()
+                dst_ws.cell(row, 2).value = node.gettarget()
+                row += 1
+        dst_wb.save(dst)
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+    def convert_Tmx2Xliff(self, src, dst):
+        xliff_file = xlifffile()
+        xliff_file.setsourcelanguage('en')
+        xliff_file.settargetlanguage('th')
+        with open(src, 'rb') as fin:
+            tmx_file = tmxfile(fin, 'en', 'th')
+            for node in tmx_file.unit_iter():
+                new_node = xliffunit(node.getsource())
+                new_node.settarget(node.gettarget())
+                xliff_file.addunit(new_node)
+        xliff_file.savefile(dst)
+        fin = open(dst, "r", encoding='utf-8')
+        data = fin.read()
+        fin.close()
+        data = data.replace('<xliff xmlns="urn:oasis:names:tc:xliff:document:1.1" version="1.1">', '<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">')
+        fout = open(dst, 'w', encoding='utf-8')
+        fout.write(data)
+        fout.close()
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+    def convert_Xliff2Tmx(self, src, dst):
+        fin = open(src, 'r', encoding = "utf-8")
+        data = fin.read()
+        xliff_file = xlifffile.parsestring(data)
+        tmx_file = tmxfile()
+        for node in xliff_file.unit_iter():
+            tmx_file.addtranslation(node.source, "en", node.target, "th")
+        tmx_file.savefile(dst)
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+
+    def convert_Excel2Xliff(self, src, dst):
+        src_wb = openpyxl.load_workbook(src)
+        src_ws = src_wb.worksheets[0]        
+        en_col = 1
+        th_col = 2
+        for col in range(1,src_ws.max_column):
+            cell_value = src_ws.cell(1, col).value.lower()
+            if 'en' == cell_value:
+                en_col = col
+            if 'th' == cell_value:
+                th_col = col
+        xliff_file = xlifffile()
+        xliff_file.setsourcelanguage('en')
+        xliff_file.settargetlanguage('th')
+        for row in range(2, src_ws.max_row+1):
+            new_node = xliffunit(src_ws.cell(row, en_col).value)
+            new_node.settarget(src_ws.cell(row, th_col).value)
+            xliff_file.addunit(new_node)
+        xliff_file.savefile(dst)
+        fin = open(dst, "r", encoding='utf-8')
+        data = fin.read()
+        fin.close()
+        data = data.replace('<xliff xmlns="urn:oasis:names:tc:xliff:document:1.1" version="1.1">', '<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">')
+        fout = open(dst, 'w', encoding='utf-8')
+        fout.write(data)
+        fout.close()
+        QMessageBox.information(self, "Information", "Converting was done successfully")
+
+    def convert_Xliff2Excel(self, src, dst):
+        if not os.path.exists(dst):
+            dst_wb = openpyxl.Workbook()
+            ss_sheet = dst_wb['Sheet']
+            ss_sheet.title = 'transmem'
+            dst_wb.save(dst)
+        dst_wb = openpyxl.load_workbook(dst)
+        dst_ws = dst_wb['transmem']
+        lines = open(src, encoding='utf-8').read().strip().split('\n')
+        dst_ws.cell(1, 1).value = 'en'
+        dst_ws.cell(1, 2).value = 'th'
+        fin = open(src, 'r', encoding = "utf-8")
+        data = fin.read()
+        xliff_file = xlifffile.parsestring(data)
+        row = 2
+        for node in xliff_file.unit_iter():
+            dst_ws.cell(row, 1).value = node.source
+            dst_ws.cell(row, 2).value = node.target
+            row += 1
+        dst_wb.save(dst)
+        QMessageBox.information(self, "Information", "Converting was done successfully")
 
 class Dialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
